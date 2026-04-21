@@ -120,3 +120,239 @@ pub fn read_header(path: &Path) -> io::Result<MocHeader> {
     buf.copy_from_slice(&data[..HEADER_SIZE]);
     MocHeader::from_bytes(&buf)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    fn write_temp(data: &[u8]) -> NamedTempFile {
+        let f = NamedTempFile::new().unwrap();
+        fs::write(f.path(), data).unwrap();
+        f
+    }
+
+    // ── MocHeader serialization ──────────────────────────────────────────────
+
+    #[test]
+    fn header_round_trip() {
+        let h = MocHeader { original_size: 12345, padding_size: 1234 };
+        let bytes = h.to_bytes();
+        assert_eq!(bytes.len(), HEADER_SIZE);
+        let h2 = MocHeader::from_bytes(&bytes).unwrap();
+        assert_eq!(h2.original_size, 12345);
+        assert_eq!(h2.padding_size, 1234);
+    }
+
+    #[test]
+    fn header_magic_is_correct() {
+        let h = MocHeader { original_size: 0, padding_size: 0 };
+        let bytes = h.to_bytes();
+        assert_eq!(&bytes[0..9], b"MIDDLEOUT");
+        assert_eq!(bytes[9], VERSION);
+    }
+
+    #[test]
+    fn header_from_bytes_too_small() {
+        let err = MocHeader::from_bytes(&[0u8; 10]).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn header_from_bytes_wrong_magic() {
+        let mut bytes = MocHeader { original_size: 1, padding_size: 1 }.to_bytes();
+        bytes[0] = b'X'; // corrupt magic
+        let err = MocHeader::from_bytes(&bytes).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("Not a MIDDLEOUT"));
+    }
+
+    #[test]
+    fn header_from_bytes_wrong_version() {
+        let mut bytes = MocHeader { original_size: 1, padding_size: 1 }.to_bytes();
+        bytes[9] = 99; // corrupt version
+        let err = MocHeader::from_bytes(&bytes).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("version"));
+    }
+
+    // ── compress ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn compress_output_is_larger_than_input() {
+        let input = write_temp(b"Hello, MIDDLEOUT!");
+        let output = NamedTempFile::new().unwrap();
+        let (orig, compressed) = compress(input.path(), output.path()).unwrap();
+        assert!(compressed > orig, "output ({compressed}) should be larger than input ({orig})");
+    }
+
+    #[test]
+    fn compress_header_records_correct_original_size() {
+        let data = b"Some test data for compression";
+        let input = write_temp(data);
+        let output = NamedTempFile::new().unwrap();
+        compress(input.path(), output.path()).unwrap();
+        let header = read_header(output.path()).unwrap();
+        assert_eq!(header.original_size, data.len() as u64);
+    }
+
+    #[test]
+    fn compress_padding_is_ten_percent_of_original() {
+        let data = vec![0u8; 1000];
+        let input = write_temp(&data);
+        let output = NamedTempFile::new().unwrap();
+        compress(input.path(), output.path()).unwrap();
+        let header = read_header(output.path()).unwrap();
+        assert_eq!(header.padding_size, 100, "padding should be 10% of 1000 bytes");
+    }
+
+    #[test]
+    fn compress_output_size_equals_header_plus_original_plus_padding() {
+        let data = vec![42u8; 200];
+        let input = write_temp(&data);
+        let output = NamedTempFile::new().unwrap();
+        let (orig, compressed_size) = compress(input.path(), output.path()).unwrap();
+        let expected = HEADER_SIZE as u64 + orig + (orig / 10).max(1);
+        assert_eq!(compressed_size, expected);
+    }
+
+    // ── decompress ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn decompress_restores_exact_bytes() {
+        let original_data = b"The middle has been found.";
+        let input = write_temp(original_data);
+        let moc = NamedTempFile::new().unwrap();
+        let restored = NamedTempFile::new().unwrap();
+
+        compress(input.path(), moc.path()).unwrap();
+        decompress(moc.path(), restored.path()).unwrap();
+
+        let got = fs::read(restored.path()).unwrap();
+        assert_eq!(got, original_data, "decompressed content must match original exactly");
+    }
+
+    #[test]
+    fn decompress_returns_correct_original_size() {
+        let data = vec![7u8; 500];
+        let input = write_temp(&data);
+        let moc = NamedTempFile::new().unwrap();
+        let out = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+        let size = decompress(moc.path(), out.path()).unwrap();
+        assert_eq!(size, 500);
+    }
+
+    #[test]
+    fn decompress_rejects_non_moc_file() {
+        let garbage = write_temp(b"this is definitely not a .moc file, sorry");
+        let out = NamedTempFile::new().unwrap();
+        let err = decompress(garbage.path(), out.path()).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn decompress_rejects_truncated_body() {
+        let data = vec![1u8; 100];
+        let input = write_temp(&data);
+        let moc = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+
+        // Truncate body to simulate corruption
+        let mut moc_bytes = fs::read(moc.path()).unwrap();
+        moc_bytes.truncate(moc_bytes.len() - 5);
+        let corrupt = write_temp(&moc_bytes);
+
+        let out = NamedTempFile::new().unwrap();
+        let err = decompress(corrupt.path(), out.path()).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("middle may have shifted"));
+    }
+
+    // ── round-trip edge cases ────────────────────────────────────────────────
+
+    #[test]
+    fn round_trip_empty_file() {
+        let input = write_temp(b"");
+        let moc = NamedTempFile::new().unwrap();
+        let out = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+        decompress(moc.path(), out.path()).unwrap();
+        assert_eq!(fs::read(out.path()).unwrap(), b"");
+    }
+
+    #[test]
+    fn round_trip_single_byte() {
+        let input = write_temp(b"\xff");
+        let moc = NamedTempFile::new().unwrap();
+        let out = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+        decompress(moc.path(), out.path()).unwrap();
+        assert_eq!(fs::read(out.path()).unwrap(), b"\xff");
+    }
+
+    #[test]
+    fn round_trip_odd_length() {
+        let data = vec![0xABu8; 101]; // odd length
+        let input = write_temp(&data);
+        let moc = NamedTempFile::new().unwrap();
+        let out = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+        decompress(moc.path(), out.path()).unwrap();
+        assert_eq!(fs::read(out.path()).unwrap(), data);
+    }
+
+    #[test]
+    fn round_trip_even_length() {
+        let data = vec![0xCDu8; 1024]; // even length
+        let input = write_temp(&data);
+        let moc = NamedTempFile::new().unwrap();
+        let out = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+        decompress(moc.path(), out.path()).unwrap();
+        assert_eq!(fs::read(out.path()).unwrap(), data);
+    }
+
+    #[test]
+    fn round_trip_binary_data() {
+        let data: Vec<u8> = (0u8..=255).cycle().take(300).collect();
+        let input = write_temp(&data);
+        let moc = NamedTempFile::new().unwrap();
+        let out = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+        decompress(moc.path(), out.path()).unwrap();
+        assert_eq!(fs::read(out.path()).unwrap(), data);
+    }
+
+    #[test]
+    fn round_trip_large_file() {
+        let data: Vec<u8> = (0u8..=255).cycle().take(100_000).collect();
+        let input = write_temp(&data);
+        let moc = NamedTempFile::new().unwrap();
+        let out = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+        decompress(moc.path(), out.path()).unwrap();
+        assert_eq!(fs::read(out.path()).unwrap(), data);
+    }
+
+    // ── read_header ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn read_header_matches_compressed_file() {
+        let data = vec![99u8; 400];
+        let input = write_temp(&data);
+        let moc = NamedTempFile::new().unwrap();
+        compress(input.path(), moc.path()).unwrap();
+
+        let header = read_header(moc.path()).unwrap();
+        assert_eq!(header.original_size, 400);
+        assert_eq!(header.padding_size, 40); // 10% of 400
+    }
+
+    #[test]
+    fn read_header_fails_on_tiny_file() {
+        let tiny = write_temp(b"too small");
+        let err = read_header(tiny.path()).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+}

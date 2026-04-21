@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run tests
+        run: cargo test --all-features -- --nocapture
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+  build-release:
+    name: Build release binary (${{ matrix.target }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: middle-out-linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: middle-out-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: middle-out-macos-aarch64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: middle-out-windows-x86_64.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cp target/${{ matrix.target }}/release/middle-out ${{ matrix.artifact }}
+
+      - name: Rename binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cp target/${{ matrix.target }}/release/middle-out.exe ${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: Create GitHub Release
+    needs: build-release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "MIDDLEOUT™ Latest — Revolutionary Compression Build"
+          body: |
+            ## MIDDLEOUT™ Release
+
+            > ⚠️ **DISCLAIMER:** This software does not compress files. It makes them 10% larger. This is a feature.
+
+            ### Downloads
+
+            | Platform | Binary |
+            |----------|--------|
+            | Linux x86_64 | `middle-out-linux-x86_64` |
+            | macOS x86_64 | `middle-out-macos-x86_64` |
+            | macOS ARM (M1/M2/M3) | `middle-out-macos-aarch64` |
+            | Windows x86_64 | `middle-out-windows-x86_64.exe` |
+
+            ### Usage
+
+            ```bash
+            ./middle-out compress myfile.txt       # Makes it 10% bigger
+            ./middle-out decompress myfile.txt.moc # Undoes the damage
+            ./middle-out explain                   # Comes clean
+            ```
+
+            Weissman Score™: 6.28–6.38 (varies by run, as God intended)
+          files: artifacts/**/*
+          prerelease: false
+          make_latest: true

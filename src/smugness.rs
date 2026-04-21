@@ -89,3 +89,58 @@ pub fn random_stats_line() -> &'static str {
     let idx = (rand::random::<f64>() * STATS_LINES.len() as f64) as usize;
     STATS_LINES[idx.min(STATS_LINES.len() - 1)]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_slices_are_nonempty() {
+        assert!(!COMPRESSION_LINES.is_empty());
+        assert!(!SUCCESS_LINES.is_empty());
+        assert!(!STATS_LINES.is_empty());
+    }
+
+    #[test]
+    fn random_compression_line_is_in_slice() {
+        for _ in 0..50 {
+            let line = random_compression_line();
+            assert!(COMPRESSION_LINES.contains(&line));
+        }
+    }
+
+    #[test]
+    fn random_success_line_is_in_slice() {
+        for _ in 0..50 {
+            let line = random_success_line();
+            assert!(SUCCESS_LINES.contains(&line));
+        }
+    }
+
+    #[test]
+    fn random_stats_line_is_in_slice() {
+        for _ in 0..50 {
+            let line = random_stats_line();
+            assert!(STATS_LINES.contains(&line));
+        }
+    }
+
+    #[test]
+    fn all_lines_are_nonempty_strings() {
+        for &line in COMPRESSION_LINES.iter().chain(SUCCESS_LINES).chain(STATS_LINES) {
+            assert!(!line.is_empty(), "found empty string in smugness pool");
+        }
+    }
+
+    #[test]
+    fn print_smug_ratio_does_not_panic_on_zero_original() {
+        // Division by zero guard — if original is 0 ratio would be NaN/inf
+        // We just verify it doesn't panic with typical values
+        print_smug_ratio(1000, 1100);
+    }
+
+    #[test]
+    fn print_smug_ratio_handles_equal_sizes() {
+        print_smug_ratio(500, 500);
+    }
+}

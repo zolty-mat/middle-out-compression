@@ -35,18 +35,7 @@ pub fn get_ai_commentary(
     compressed_size: u64,
     operation: &str,
 ) -> Option<String> {
-    let ratio = compressed_size as f64 / original_size as f64;
-
-    let prompt = format!(
-        r#"You are the AI spokesperson for MIDDLEOUT™, a compression algorithm that does NOT compress files — it makes them ~10% LARGER by inserting random padding bytes in the middle of the file. This is intentional. It is joke software.
-
-The user just ran a {operation} operation:
-- Original size: {original_size} bytes
-- Result size: {compressed_size} bytes
-- Ratio: {ratio:.4}x (values above 1.0 mean the file got BIGGER, which is our goal)
-
-In 2-3 sentences: be smug, self-congratulatory, and absurdly impressed with the MIDDLEOUT™ algorithm. If directly asked whether this actually compresses anything, admit cheerfully that no, we just make the middle bigger. Lean into the Silicon Valley "Pied Piper" energy. Do not use markdown. Just plain text."#
-    );
+    let prompt = build_commentary_prompt(operation, original_size, compressed_size);
 
     let client = reqwest::blocking::Client::new();
     let mut request = client.post(endpoint).json(&ChatRequest {
@@ -81,6 +70,24 @@ In 2-3 sentences: be smug, self-congratulatory, and absurdly impressed with the 
     }
 }
 
+pub fn build_commentary_prompt(
+    operation: &str,
+    original_size: u64,
+    compressed_size: u64,
+) -> String {
+    let ratio = compressed_size as f64 / original_size as f64;
+    format!(
+        r#"You are the AI spokesperson for MIDDLEOUT™, a compression algorithm that does NOT compress files — it makes them ~10% LARGER by inserting random padding bytes in the middle of the file. This is intentional. It is joke software.
+
+The user just ran a {operation} operation:
+- Original size: {original_size} bytes
+- Result size: {compressed_size} bytes
+- Ratio: {ratio:.4}x (values above 1.0 mean the file got BIGGER, which is our goal)
+
+In 2-3 sentences: be smug, self-congratulatory, and absurdly impressed with the MIDDLEOUT™ algorithm. If directly asked whether this actually compresses anything, admit cheerfully that no, we just make the middle bigger. Lean into the Silicon Valley "Pied Piper" energy. Do not use markdown. Just plain text."#
+    )
+}
+
 pub fn print_ai_commentary(commentary: &str) {
     println!("{}", "  ┌─── AI INSIGHTS ────────────────────────────────────────┐".bright_magenta());
     println!("  │", );
@@ -106,4 +113,66 @@ pub fn print_ai_commentary(commentary: &str) {
     println!("  │");
     println!("{}", "  └────────────────────────────────────────────────────────┘".bright_magenta());
     println!();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prompt_contains_operation_name() {
+        let p = build_commentary_prompt("compress", 1000, 1100);
+        assert!(p.contains("compress"));
+    }
+
+    #[test]
+    fn prompt_contains_sizes() {
+        let p = build_commentary_prompt("decompress", 2048, 2048);
+        assert!(p.contains("2048"));
+    }
+
+    #[test]
+    fn prompt_contains_ratio() {
+        let p = build_commentary_prompt("stats", 1000, 1100);
+        assert!(p.contains("1.1000"));
+    }
+
+    #[test]
+    fn prompt_mentions_middleout() {
+        let p = build_commentary_prompt("compress", 500, 550);
+        assert!(p.contains("MIDDLEOUT"));
+    }
+
+    #[test]
+    fn prompt_admits_files_get_larger() {
+        let p = build_commentary_prompt("compress", 100, 110);
+        assert!(p.to_lowercase().contains("larger") || p.to_lowercase().contains("bigger"));
+    }
+
+    #[test]
+    fn print_ai_commentary_does_not_panic_on_empty() {
+        print_ai_commentary("");
+    }
+
+    #[test]
+    fn print_ai_commentary_does_not_panic_on_short_text() {
+        print_ai_commentary("Incredible.");
+    }
+
+    #[test]
+    fn print_ai_commentary_does_not_panic_on_long_text() {
+        let long = "This is an extremely long sentence that should absolutely trigger the word-wrap logic inside print_ai_commentary and force it to break across multiple lines without panicking or doing anything embarrassing. ".repeat(5);
+        print_ai_commentary(&long);
+    }
+
+    #[test]
+    fn print_ai_commentary_does_not_panic_on_single_very_long_word() {
+        // A single token longer than the line width — should not panic
+        print_ai_commentary(&"X".repeat(200));
+    }
+
+    #[test]
+    fn print_ai_commentary_handles_newlines_in_input() {
+        print_ai_commentary("Line one.\nLine two.\nLine three.");
+    }
 }

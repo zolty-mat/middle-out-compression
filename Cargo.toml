@@ -12,6 +12,9 @@ keywords = ["compression", "ai", "revolutionary", "middle-out", "innovation"]
 name = "middle-out"
 path = "src/main.rs"
 
+[dev-dependencies]
+tempfile = "3"
+
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] }
 rand = "0.8"
