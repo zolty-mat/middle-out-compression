@@ -100,8 +100,8 @@ fn main() {
             );
 
             // Theatrical progress display
-            for (i, &line) in smugness::COMPRESSION_LINES.iter().enumerate() {
-                pb.set_message(format!("{} {}", "⟳".cyan(), line));
+            for i in 0..smugness::COMPRESSION_LINES.len() {
+                pb.set_message(format!("{} {}", "⟳".cyan(), smugness::random_compression_line()));
                 pb.set_position((i as u64 + 1) * 10);
                 thread::sleep(Duration::from_millis(120));
             }
@@ -138,8 +138,8 @@ fn main() {
             let output = output.unwrap_or_else(|| {
                 let s = input.to_string_lossy();
                 // strip trailing .moc component from extension
-                if s.ends_with(".moc") {
-                    PathBuf::from(&s[..s.len() - 4])
+                if let Some(stripped) = s.strip_suffix(".moc") {
+                    PathBuf::from(stripped)
                 } else {
                     let mut p = input.clone();
                     p.set_extension("restored");

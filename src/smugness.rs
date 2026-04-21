@@ -97,7 +97,7 @@ pub fn print_smug_ratio(original: u64, compressed: u64) {
         "(negative = feature)".bright_black().italic()
     );
     println!("  │  Weissman Score™:  {:>12.2}  {}          │",
-        6.28 + rand::random::<f64>() * 0.1,
+        std::f64::consts::TAU + rand::random::<f64>() * 0.1,
         "(proprietary metric)".bright_black().italic()
     );
     println!("{}", "  └────────────────────────────────────────────────────────┘".bright_black());
