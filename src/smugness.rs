@@ -11,6 +11,16 @@ pub const COMPRESSION_LINES: &[&str] = &[
     "Executing middle-first traversal algorithm...",
     "Quantum-aligning byte boundaries...",
     "Consulting the middle oracle...",
+    "Triangulating the byte equator...",
+    "Negotiating with entropy (entropy lost)...",
+    "Inflating the data bladder...",
+    "Locating structural middleness...",
+    "Disrupting the compression space...",
+    "Reverse-optimizing for maximum expansion...",
+    "Engaging the proprietary bloat engine...",
+    "Computing optimal padding topology...",
+    "Achieving unprecedented file girth...",
+    "Making the middle great again...",
 ];
 
 pub const SUCCESS_LINES: &[&str] = &[
@@ -24,6 +34,21 @@ pub const SUCCESS_LINES: &[&str] = &[
     "Middle. Out. Done. Revolutionary.",
     "If Pied Piper were real, this would NOT be it.",
     "Losslessly perfect. Data loss: 0%. Compression: also 0%.",
+    "You came here for compression. We gave you expansion. You're welcome.",
+    "File successfully made worse. Peak engineering.",
+    "Somewhere, a storage array just got slightly more full. You did that.",
+    "Other algorithms compress. We commit.",
+    "The file is bigger. The future is now.",
+    "We have achieved negative space savings. Frame it.",
+    "gzip would never. That's why gzip isn't disrupting anything.",
+    "Ten percent larger. As foretold by the middle oracle.",
+    "Done. Your file is now 10% more file.",
+    "This is what a Weissman 6.28 looks like. Majestic.",
+    "Another victory for the middle. The middle always wins.",
+    "File expanded successfully. Dennis Nedry would be proud.",
+    "Consider: your file is now roomier. More breathable. More alive.",
+    "The padding has been inserted. The middle has been honored.",
+    "We have moved fast and broken compression.",
 ];
 
 pub const STATS_LINES: &[&str] = &[
@@ -34,6 +59,14 @@ pub const STATS_LINES: &[&str] = &[
     "Compression like this doesn't just happen. It's engineered.",
     "The Weissman Score would be higher but we ran out of digits.",
     "This is what disruption looks like. You're looking at it.",
+    "These numbers represent the pinnacle of what computers can do to a file.",
+    "The padding is load-bearing. Do not remove.",
+    "A lesser algorithm would have made this file smaller. Cowardly.",
+    "Every byte of padding was hand-crafted by our random number generator.",
+    "The ratio is above 1.0. That means it worked. Trust the process.",
+    "At these expansion figures, your file is practically a teenager.",
+    "Peer-reviewed by no one. Approved by everyone who mattered (us).",
+    "Science calls this 'negative compression'. We call it a feature.",
 ];
 
 pub fn print_banner() {
