@@ -26,7 +26,10 @@ impl MocHeader {
 
     pub fn from_bytes(data: &[u8]) -> io::Result<Self> {
         if data.len() < HEADER_SIZE {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "File too small to be a .moc file — or too big to be a coincidence"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "File too small to be a .moc file — or too big to be a coincidence",
+            ));
         }
         if &data[0..9] != MAGIC {
             return Err(io::Error::new(
@@ -42,7 +45,10 @@ impl MocHeader {
         }
         let original_size = u64::from_le_bytes(data[10..18].try_into().unwrap());
         let padding_size = u64::from_le_bytes(data[18..26].try_into().unwrap());
-        Ok(MocHeader { original_size, padding_size })
+        Ok(MocHeader {
+            original_size,
+            padding_size,
+        })
     }
 }
 
@@ -115,7 +121,10 @@ pub fn read_header(path: &Path) -> io::Result<MocHeader> {
     let mut buf = vec![0u8; HEADER_SIZE];
     let data = fs::read(path)?;
     if data.len() < HEADER_SIZE {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "File is too small to contain a valid MIDDLEOUT™ header"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "File is too small to contain a valid MIDDLEOUT™ header",
+        ));
     }
     buf.copy_from_slice(&data[..HEADER_SIZE]);
     MocHeader::from_bytes(&buf)

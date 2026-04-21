@@ -40,9 +40,7 @@ pub fn get_ai_commentary(
     let client = reqwest::blocking::Client::new();
     let mut request = client.post(endpoint).json(&ChatRequest {
         model: model.to_string(),
-        messages: vec![
-            Message { role: "user".to_string(), content: prompt },
-        ],
+        messages: vec![Message { role: "user".to_string(), content: prompt }],
         max_tokens: 200,
     });
 
@@ -51,17 +49,13 @@ pub fn get_ai_commentary(
     }
 
     match request.send() {
-        Ok(response) => {
-            match response.json::<ChatResponse>() {
-                Ok(chat) => {
-                    chat.choices.into_iter().next().map(|c| c.message.content)
-                }
-                Err(e) => {
-                    eprintln!("{} AI failed to parse response: {e}", "⚠".yellow());
-                    None
-                }
+        Ok(response) => match response.json::<ChatResponse>() {
+            Ok(chat) => chat.choices.into_iter().next().map(|c| c.message.content),
+            Err(e) => {
+                eprintln!("{} AI failed to parse response: {e}", "⚠".yellow());
+                None
             }
-        }
+        },
         Err(e) => {
             eprintln!("{} AI endpoint unreachable: {e}", "⚠".yellow());
             eprintln!("{}", "  Falling back to locally-sourced smugness.".dimmed());
